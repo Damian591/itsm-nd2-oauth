@@ -124,7 +124,7 @@ Po pirmo paleidimo:
    - `alice` – grupė `students`
    - `bob` – grupė `staff`
    - `admin1` – grupė `admins`
-3. Patikrinti: `https://auth.itsm.test/realms/itsm/account` – prisijungimas kaip `ona`.
+3. Patikrinti: `https://auth.itsm.test/realms/itsm/account` – prisijungimas kaip `alice`.
 
 ## Dažnos problemos
 
