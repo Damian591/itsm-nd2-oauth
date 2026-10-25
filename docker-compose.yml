@@ -68,5 +68,26 @@ services:
     ports:
       - "127.0.0.1:8025:8025"
 
+  # Kliento programa (BFF)
+  app:
+    build: ./app
+    restart: unless-stopped
+    environment:
+      # tik tai, ko programai reikia – ne visas .env (mažiausios privilegijos)
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      FLASK_SECRET_KEY: ${FLASK_SECRET_KEY}
+      REDIS_URL: ${REDIS_URL}
+      # kad Python pasitikėtų https://auth.itsm.test (mkcert CA), be verify=False
+      SSL_CERT_FILE: /certs/rootCA.pem
+      REQUESTS_CA_BUNDLE: /certs/rootCA.pem
+    volumes:
+      - ./certs/rootCA.pem:/certs/rootCA.pem:ro
+    depends_on:
+      - redis
+      - proxy
+
 volumes:
   kcdb: {}
+

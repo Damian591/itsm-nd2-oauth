@@ -1,0 +1,5 @@
+body { font-family: system-ui, sans-serif; background: #f5f6f8; color: #1d2330; margin: 0; }
+main { max-width: 640px; margin: 4rem auto; background: #fff; padding: 2rem; border-radius: 8px; }
+.button, button { display: inline-block; background: #2f5fd0; color: #fff; padding: .6rem 1.2rem;
+                  border: 0; border-radius: 6px; text-decoration: none; font-size: 1rem; cursor: pointer; }
+.muted { color: #6b7280; }
