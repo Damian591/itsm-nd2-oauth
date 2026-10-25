@@ -115,6 +115,16 @@ docker compose down -v        # sustabdyti IR ištrinti Keycloak DB (viskas iš 
 
 ## Keycloak konfigūracija
 
+Realm `itsm` (klientai `webapp`, scopes `notes.read` / `notes.write` su audience `notes-api`, rolės `user` / `admin`, grupės `students` / `staff` / `admins`) automatiškai importuojamas iš `keycloak/import/realm-export.json` per pirmą `docker compose up`.
+
+Po pirmo paleidimo:
+
+1. https://auth.itsm.test/admin → realm **itsm** → Clients → `webapp` → Credentials → **Regenerate** → nukopijuoti į `.env` (`OIDC_CLIENT_SECRET=`).
+2. Sukurti testinius naudotojus (Users → Add user, Email verified: On, Credentials → Set password, Temporary: Off):
+   - `alice` – grupė `students`
+   - `bob` – grupė `staff`
+   - `admin1` – grupė `admins`
+3. Patikrinti: `https://auth.itsm.test/realms/itsm/account` – prisijungimas kaip `ona`.
 
 ## Dažnos problemos
 
