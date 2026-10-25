@@ -1,0 +1,17 @@
+(security) {
+	tls /certs/itsm.test.pem /certs/itsm.test-key.pem {
+		protocols tls1.2 tls1.3
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+}
+
+auth.itsm.test {
+	import security
+	reverse_proxy keycloak:8080
+}
