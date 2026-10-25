@@ -5,7 +5,6 @@
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
-		Referrer-Policy "no-referrer"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		-Server
 	}
@@ -13,5 +12,15 @@
 
 auth.itsm.test {
 	import security
+	header Referrer-Policy "no-referrer"
 	reverse_proxy keycloak:8080
+}
+
+app.itsm.test {
+	import security
+	# same-origin: Referer only to app.itsm.test itself (Flask-WTF CSRF check needs it), nothing to other sites
+	header Referrer-Policy "same-origin"
+	header Content-Security-Policy "default-src 'self'; frame-ancestors 'none'; form-action 'self' https://auth.itsm.test; base-uri 'none'; object-src 'none'"
+	respond /backchannel-logout 404
+	reverse_proxy app:8000
 }

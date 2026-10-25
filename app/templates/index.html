@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+{% if user %}
+  <h1>Hello, {{ user.name or user.username }}</h1>
+  <p>Signed in as <strong>{{ user.username }}</strong> ({{ user.email }})</p>
+  <p class="muted">Your notes will appear here.</p>
+  <form method="post" action="/logout">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit">Sign out</button>
+  </form>
+{% else %}
+  <h1>Secure Notes</h1>
+  <p>Please sign in to see your notes.</p>
+  <a class="button" href="/login">Sign in</a>
+{% endif %}
+{% endblock %}
