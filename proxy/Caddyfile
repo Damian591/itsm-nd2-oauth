@@ -24,3 +24,10 @@ app.itsm.test {
 	respond /backchannel-logout 404
 	reverse_proxy app:8000
 }
+
+api.itsm.test {
+	import security
+	header Referrer-Policy "no-referrer"
+	header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+	reverse_proxy api:8000
+}

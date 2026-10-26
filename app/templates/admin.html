@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>Admin</h1>
+  <p class="who">Signed in as <strong>{{ user.username }}</strong> · <a href="{{ url_for('index') }}">Back</a></p>
+
+  <h2>Notes per user</h2>
+  {% if owners %}
+    <table>
+      <thead><tr><th>User ID (sub)</th><th>Notes</th></tr></thead>
+      <tbody>
+        {% for o in owners %}
+          <tr><td><code>{{ o.owner }}</code></td><td>{{ o.count }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p>No notes yet.</p>
+  {% endif %}
+  <p class="hint">Admins see only counts, not the contents of other users' notes.</p>
+{% endblock %}
