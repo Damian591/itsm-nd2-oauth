@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import os
@@ -7,7 +8,7 @@ from urllib.parse import urlencode
 import redis
 import requests
 from authlib.integrations.flask_client import OAuth
-from flask import Flask, redirect, render_template, request, session
+from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
@@ -19,8 +20,9 @@ ISSUER = os.environ["OIDC_ISSUER"]              # https://auth.itsm.test/realms/
 CLIENT_ID = os.environ["OIDC_CLIENT_ID"]        # webapp
 CLIENT_SECRET = os.environ["OIDC_CLIENT_SECRET"]
 APP_URL = "https://app.itsm.test"
-REDIRECT_URI = f"{APP_URL}/callback"            # FIKSUOTAS, ne iš Host antraštės
-ABSOLUTE_SESSION_MAX = 10 * 3600                # absoliutus sesijos limitas (10 h)
+API_URL = "https://api.itsm.test"               # resource server (via Caddy, with TLS)
+REDIRECT_URI = f"{APP_URL}/callback"            # FIXED, not from the “Host” header
+ABSOLUTE_SESSION_MAX = 10 * 3600                # absolute session limit (10 hours)
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger("auth")
@@ -32,7 +34,7 @@ def audit(event, **fields):
 
 
 app = Flask(__name__)
-# Caddy perduoda X-Forwarded-For/Proto/Host – kad matytume tikrą kliento IP
+
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 rdb = redis.from_url(os.environ["REDIS_URL"])
@@ -60,12 +62,11 @@ oauth.register(
     server_metadata_url=f"{ISSUER}/.well-known/openid-configuration",
     client_kwargs={
         "scope": "openid profile email notes.read notes.write",
-        "code_challenge_method": "S256",        # įjungia PKCE
+        "code_challenge_method": "S256",
     },
 )
 
 
-# --- Pagalbinės funkcijos ---------------------------------------------------
 def current_user():
     user = session.get("user")
     if not user:
@@ -76,16 +77,95 @@ def current_user():
     return user
 
 
+def jwt_payload(token):
+    part = token.split(".")[1]
+    part += "=" * (-len(part) % 4)
+    return json.loads(base64.urlsafe_b64decode(part))
+
+
+class LoginRequired(Exception):
+    """The Access token has expired or was rejected by the API—you need to log in again."""
+
+
+def api_call(method, path, **kwargs):
+    tokens = session.get("tokens") or {}
+    access_token = tokens.get("access_token")
+
+    if not access_token or tokens.get("expires_at", 0) < time.time() + 10:
+        raise LoginRequired()
+    resp = requests.request(
+        method, f"{API_URL}{path}", timeout=5,
+        headers={"Authorization": f"Bearer {access_token}"}, **kwargs,
+    )
+    if resp.status_code == 401:
+        raise LoginRequired()
+    return resp
+
+
+@app.errorhandler(LoginRequired)
+def login_required(_exc):
+    session.clear()
+    return redirect(url_for("login", next=request.path if request.method == "GET" else "/"))
+
+
+@app.errorhandler(requests.RequestException)
+def api_unreachable(exc):
+    audit("api_unreachable", reason=type(exc).__name__)
+    return render_template("error.html", title="Service unavailable",
+                           message="Notes service is not reachable. Please try again later."), 502
+
+
 @app.after_request
 def no_store(resp):
     resp.headers["Cache-Control"] = "no-store"
     return resp
 
-
-# --- Maršrutai --------------------------------------------------------------
 @app.get("/")
 def index():
-    return render_template("index.html", user=current_user())
+    user = current_user()
+    notes = []
+    if user:
+        resp = api_call("GET", "/notes")
+        if resp.ok:
+            notes = resp.json()["notes"]
+        else:
+            flash("Could not load notes.")
+    return render_template("index.html", user=user, notes=notes,
+                           is_admin="admin" in session.get("roles", []))
+
+
+@app.post("/notes")
+def create_note():
+    if not current_user():
+        return redirect(url_for("login"))
+    resp = api_call("POST", "/notes", json={
+        "title": request.form.get("title", ""),
+        "body": request.form.get("body", ""),
+    })
+    if resp.status_code != 201:
+        flash(resp.json().get("error_description", "Could not save the note."))
+    return redirect(url_for("index"))
+
+
+@app.post("/notes/<uuid:note_id>/delete")
+def delete_note(note_id):
+    if not current_user():
+        return redirect(url_for("login"))
+    resp = api_call("DELETE", f"/notes/{note_id}")
+    if resp.status_code != 204:
+        flash("Note not found.")
+    return redirect(url_for("index"))
+
+
+@app.get("/admin")
+def admin():
+    if not current_user():
+        return redirect(url_for("login", next="/admin"))
+    resp = api_call("GET", "/admin/notes")
+    if resp.status_code == 403:
+        abort(403)
+    return render_template("admin.html", user=current_user(),
+                           owners=resp.json().get("owners", []))
 
 
 @app.get("/login")
@@ -126,6 +206,7 @@ def callback():
         "id_token": token.get("id_token"),
         "expires_at": token.get("expires_at"),
     }
+    session["roles"] = jwt_payload(token["access_token"]).get("realm_access", {}).get("roles", [])
     session["auth_time"] = userinfo.get("auth_time", int(time.time()))
     session["created_at"] = int(time.time())
     session["kc_sid"] = userinfo.get("sid")
@@ -139,7 +220,6 @@ def logout():
     sub = (session.get("user") or {}).get("sub")
     meta = oauth.kc.load_server_metadata()
 
-    # 1) atšaukiame refresh žetoną Keycloak'e (RFC 7009)
     if tokens.get("refresh_token"):
         try:
             requests.post(meta["revocation_endpoint"], timeout=5,
@@ -149,11 +229,10 @@ def logout():
         except requests.RequestException:
             pass
 
-    # 2) sunaikiname savo sesiją (Flask-Session ištrina ją iš Redis)
     session.clear()
     audit("logout", sub=sub)
 
-    # 3) baigiame Keycloak SSO sesiją (RP-initiated logout)
+
     params = {"client_id": CLIENT_ID, "post_logout_redirect_uri": f"{APP_URL}/"}
     if tokens.get("id_token"):
         params["id_token_hint"] = tokens["id_token"]

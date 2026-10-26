@@ -3,3 +3,18 @@ main { max-width: 640px; margin: 4rem auto; background: #fff; padding: 2rem; bor
 .button, button { display: inline-block; background: #2f5fd0; color: #fff; padding: .6rem 1.2rem;
                   border: 0; border-radius: 6px; text-decoration: none; font-size: 1rem; cursor: pointer; }
 .muted { color: #6b7280; }
+
+.who { color: #555; }
+.flash { background: #fff4e5; border: 1px solid #f0c27b; padding: .5rem .75rem; border-radius: 6px; }
+.note-form { display: grid; gap: .75rem; max-width: 32rem; }
+.note-form label { display: grid; gap: .25rem; font-weight: 600; }
+.note-form input, .note-form textarea { font: inherit; padding: .5rem; border: 1px solid #ccc; border-radius: 6px; }
+.notes { list-style: none; padding: 0; display: grid; gap: .75rem; }
+.notes li { border: 1px solid #ddd; border-radius: 8px; padding: .75rem 1rem; }
+.notes h3 { margin: 0 0 .25rem; }
+.notes p { margin: 0 0 .5rem; white-space: pre-wrap; }
+.button.secondary { background: #666; }
+.button.danger { background: #b3261e; }
+table { border-collapse: collapse; }
+th, td { border: 1px solid #ddd; padding: .4rem .6rem; text-align: left; }
+.hint { color: #777; font-size: .9rem; }

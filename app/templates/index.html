@@ -1,16 +1,52 @@
 {% extends "base.html" %}
 {% block content %}
-{% if user %}
-  <h1>Hello, {{ user.name or user.username }}</h1>
-  <p>Signed in as <strong>{{ user.username }}</strong> ({{ user.email }})</p>
-  <p class="muted">Your notes will appear here.</p>
-  <form method="post" action="/logout">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit">Sign out</button>
-  </form>
-{% else %}
   <h1>Secure Notes</h1>
-  <p>Please sign in to see your notes.</p>
-  <a class="button" href="/login">Sign in</a>
-{% endif %}
+
+  {% if user %}
+    <p class="who">
+      Signed in as <strong>{{ user.username }}</strong>
+      {% if is_admin %} · <a href="{{ url_for('admin') }}">Admin</a>{% endif %}
+    </p>
+    <form method="post" action="{{ url_for('logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="button secondary">Sign out</button>
+    </form>
+
+    {% for message in get_flashed_messages() %}
+      <p class="flash">{{ message }}</p>
+    {% endfor %}
+
+    <h2>New note</h2>
+    <form method="post" action="{{ url_for('create_note') }}" class="note-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Title
+        <input name="title" maxlength="100" required>
+      </label>
+      <label>Text
+        <textarea name="body" maxlength="2000" rows="4"></textarea>
+      </label>
+      <button type="submit" class="button">Save</button>
+    </form>
+
+    <h2>My notes</h2>
+    {% if notes %}
+      <ul class="notes">
+        {% for note in notes %}
+          <li>
+            <h3>{{ note.title }}</h3>
+            <p>{{ note.body }}</p>
+            <form method="post" action="{{ url_for('delete_note', note_id=note.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="button danger">Delete</button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No notes yet.</p>
+    {% endif %}
+  {% else %}
+    <p>Sign in to see your notes.</p>
+    <a class="button" href="{{ url_for('login') }}">Sign in</a>
+  {% endif %}
 {% endblock %}
