@@ -21,7 +21,7 @@ The project is built step by step, one branch and one pull request per step.
 | 6 | Web app (BFF): login and logout with Authorization Code + PKCE | ✅ Done |
 | 7 | Notes API (resource server) with access token validation, notes UI | ✅ Done |
 | 8 | Refresh tokens with rotation, session limits | ✅ Done |
-| 9 | Keycloak security policies: MFA, password policy, brute force protection | ⏳ Next |
+| 9 | Keycloak security policies: MFA, password policy, brute force protection | ✅ Done |
 | 10 | Password reset by email | ⏳ Not started |
 | 11 | Central revocation (admin tool, back-channel logout) | ⏳ Not started |
 | 12 | Security tests and test log | ⏳ Not started |
@@ -55,6 +55,16 @@ The project is built step by step, one branch and one pull request per step.
 - **Session limits.** 30 min idle and 10 h absolute, the same in the app and in
   Keycloak. When Keycloak ends a session (timeout or admin sign-out), the next
   refresh fails and the user has to enter the password again.
+- **Password policy** (NIST SP 800-63B-4): at least 12 characters, up to 128,
+  not the username or email, checked against a blocklist of 10,000 common passwords
+  plus project words. No composition rules and no forced expiry. Passwords are
+  stored by Keycloak as Argon2 hashes.
+- **Brute force protection.** After 5 failed logins the account is locked
+  temporarily (1 min, growing up to 15 min). The error message is always the same,
+  so usernames can't be enumerated.
+- **MFA.** Every user signs in with a password and a TOTP code from an
+  authenticator app. **Recovery codes** (12 one-time codes) are the backup method
+  if the phone is lost.
 - Forms use CSRF tokens, `/login` and `/callback` are rate limited, all responses
   are `Cache-Control: no-store`, and security events are written to an audit log
   without tokens or note contents.
@@ -211,7 +221,33 @@ Every new user gets the `user` role automatically (default role of the realm).
 Passwords are up to each team member and must not appear in Git or in report
 screenshots.
 
-### 7. Try it
+### 7. Replace the temporary admin
+ 
+Keycloak shows a warning that `kcadmin` is a temporary admin. Replace it with a
+permanent admin that uses MFA. This is done in the `master` realm, which is not
+part of the realm export, so every team member does it on their own machine.
+ 
+1. Admin console → switch the realm to **master** → Users → Add user, e.g.
+   `kcroot`, Email verified on.
+2. Credentials → Set password (long, from a password manager), Temporary off.
+3. Role mapping → Assign role → filter by realm roles → **admin**.
+4. Details → Required user actions → **Configure OTP** → Save.
+5. Realm settings → Security defenses → Brute force detection: same values as in
+   realm `itsm` (lockout temporarily, 5 failures).
+6. Sign out, sign in as `kcroot`, set up TOTP.
+7. Users → `kcadmin` → Delete.
+After `docker compose down -v` Keycloak creates `kcadmin` again from `.env`, so
+these steps have to be repeated.
+ 
+### 8. Set up MFA for the test users
+ 
+Users → `alice` → Required user actions → **Configure OTP** and **Recovery
+Authentication Codes** → Save. Same for `bob` and `admin1`. On the next sign-in
+each user scans a QR code with an authenticator app (Google Authenticator,
+Microsoft Authenticator, FreeOTP, 2FAS…) and saves 12 recovery codes. New users
+get both steps automatically.
+
+### 9. Try it
 
 1. Open https://app.itsm.test, click **Sign in** and log in as `alice`. The app
    shows "Signed in as alice" and an empty note list.
