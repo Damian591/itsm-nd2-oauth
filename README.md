@@ -22,7 +22,7 @@ The project is built step by step, one branch and one pull request per step.
 | 7 | Notes API (resource server) with access token validation, notes UI | ✅ Done |
 | 8 | Refresh tokens with rotation, session limits | ✅ Done |
 | 9 | Keycloak security policies: MFA, password policy, brute force protection | ✅ Done |
-| 10 | Password reset by email | ⏳ Not started |
+| 10 | Password reset by email | ✅ Done |
 | 11 | Central revocation (admin tool, back-channel logout) | ⏳ Not started |
 | 12 | Security tests and test log | ⏳ Not started |
 | 13 | Threat model (STRIDE), ASVS mapping, report | ⏳ Not started |
@@ -65,6 +65,12 @@ The project is built step by step, one branch and one pull request per step.
 - **MFA.** Every user signs in with a password and a TOTP code from an
   authenticator app. **Recovery codes** (12 one-time codes) are the backup method
   if the phone is lost.
+- **Password reset by email.** "Forgot Password?" sends a one-time link
+  (valid 15 min) through Mailpit. Before a new password can be set the user must
+  enter a TOTP code or a recovery code, so access to the mailbox alone is not
+  enough. TOTP is not removed by the reset, recently used passwords can't be
+  reused, and the user gets an e-mail when the password or TOTP changes. The
+  answer is the same whether the user exists or not.
 - Forms use CSRF tokens, `/login` and `/callback` are rate limited, all responses
   are `Cache-Control: no-store`, and security events are written to an audit log
   without tokens or note contents.
