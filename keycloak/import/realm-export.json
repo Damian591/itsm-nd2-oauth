@@ -509,7 +509,7 @@
   "requiredCredentials": [
     "password"
   ],
-  "passwordPolicy": "length(12) and maxLength(128) and notUsername(undefined) and notEmail(undefined) and passwordBlacklist(blocklist.txt)",
+  "passwordPolicy": "length(12) and maxLength(128) and notUsername(undefined) and notEmail(undefined) and passwordBlacklist(blocklist.txt) and passwordHistory(3)",
   "otpPolicyType": "totp",
   "otpPolicyAlgorithm": "HmacSHA1",
   "otpPolicyInitialCounter": 0,
@@ -1735,13 +1735,14 @@
     "host": "mailpit",
     "replyTo": "",
     "from": "no-reply@itsm.test",
-    "fromDisplayName": "",
+    "fromDisplayName": "Secure Notes",
     "connectionTimeout": "10000"
   },
   "eventsEnabled": true,
   "eventsExpiration": 1800,
   "eventsListeners": [
-    "jboss-logging"
+    "jboss-logging",
+    "email"
   ],
   "enabledEventTypes": [
     "UPDATE_CONSENT_ERROR",
@@ -2306,6 +2307,40 @@
       ]
     },
     {
+      "id": "0ebb6346-5b1a-4174-89b0-15074f69f5b9",
+      "alias": "Reset - Verify 2FA",
+      "description": "",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-user-configured",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 0,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 2,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "auth-recovery-authn-code-form",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 3,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
       "id": "7869e727-2ae3-47de-a3ce-fd71db01b60a",
       "alias": "User creation or linking",
       "description": "Flow for the existing/non-existing user alternatives",
@@ -2675,6 +2710,82 @@
       ]
     },
     {
+      "id": "f93deb74-ca94-4d1b-ae58-d9321ae432dd",
+      "alias": "reset-credentials-mfa",
+      "description": "",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "reset-credentials-choose-user",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "reset-credential-email",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 30,
+          "autheticatorFlow": true,
+          "flowAlias": "Reset - Verify 2FA",
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "reset-password",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 40,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "DISABLED",
+          "priority": 41,
+          "autheticatorFlow": true,
+          "flowAlias": "reset-credentials-mfa Reset - Conditional OTP",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "id": "3009bbe0-77bc-4be7-8720-7e3f36befeba",
+      "alias": "reset-credentials-mfa Reset - Conditional OTP",
+      "description": "Flow to determine if the OTP should be reset or not. Set to REQUIRED to force.",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-user-configured",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "reset-otp",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "autheticatorFlow": false,
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
       "id": "7a6ca2eb-67a8-480e-a695-3f60441bd0f3",
       "alias": "saml ecp",
       "description": "SAML ECP Profile Authentication Flow",
@@ -2854,7 +2965,7 @@
   "browserFlow": "browser",
   "registrationFlow": "registration",
   "directGrantFlow": "direct grant",
-  "resetCredentialsFlow": "reset credentials",
+  "resetCredentialsFlow": "reset-credentials-mfa",
   "clientAuthenticationFlow": "clients",
   "dockerAuthenticationFlow": "docker auth",
   "firstBrokerLoginFlow": "first broker login",
@@ -2881,7 +2992,7 @@
     "acr.loa.map": "{}",
     "adminEventsExpiration": "2592000",
     "shortVerificationUri": "",
-    "actionTokenGeneratedByUserLifespan.reset-credentials": ""
+    "actionTokenGeneratedByUserLifespan.reset-credentials": "900"
   },
   "keycloakVersion": "26.8.1",
   "userManagedAccessAllowed": false,
