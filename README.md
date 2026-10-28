@@ -23,7 +23,7 @@ The project is built step by step, one branch and one pull request per step.
 | 8 | Refresh tokens with rotation, session limits | ✅ Done |
 | 9 | Keycloak security policies: MFA, password policy, brute force protection | ✅ Done |
 | 10 | Password reset by email | ✅ Done |
-| 11 | Central revocation (admin tool, back-channel logout) | ⏳ Not started |
+| 11 | Central revocation (admin tool, back-channel logout) | ✅ Done |
 | 12 | Security tests and test log | ⏳ Not started |
 | 13 | Threat model (STRIDE), ASVS mapping, report | ⏳ Not started |
 | 14 | Demo rehearsal | ⏳ Not started |
@@ -71,6 +71,12 @@ The project is built step by step, one branch and one pull request per step.
   enough. TOTP is not removed by the reset, recently used passwords can't be
   reused, and the user gets an e-mail when the password or TOTP changes. The
   answer is the same whether the user exists or not.
+- **Central revocation.** The infrastructure owner can sign out, disable or reset
+  the credentials of a user or a whole group with `admin-tools/revoke.py`, which
+  uses its own service account with only `view-users`, `query-groups` and
+  `manage-users`. Keycloak then calls the app's back-channel logout endpoint with
+  a signed logout token and the app deletes the user's sessions at once. Tests:
+  [docs/TESTING.md](docs/TESTING.md).
 - Forms use CSRF tokens, `/login` and `/callback` are rate limited, all responses
   are `Cache-Control: no-store`, and security events are written to an audit log
   without tokens or note contents.
@@ -212,6 +218,15 @@ to **itsm**.
    docker compose up -d --force-recreate app
    ```
 
+**Admin tool secret**
+
+Clients → `admin-tool` → Credentials → **Regenerate**, copy the value into `.env`
+as `ADMIN_TOOL_SECRET=...`. Check it works:
+
+```powershell
+docker compose run --rm admin-tool verify-least-privilege
+```
+
 **Test users**
 
 Users → Add user → turn **Email verified** on → join the group → Create. Then
@@ -316,7 +331,39 @@ secret, users created again.
 **When `keycloak/import/realm-export.json` changes in Git** (new Keycloak settings
 from a merged step), Keycloak does not pick it up by itself, because the realm is
 imported only when it doesn't exist yet. To get the new settings, run
-`docker compose down -v`, then `docker compose up -d` and repeat setup step 6.
+`docker compose down -v`, then `docker compose up -d` and repeat setup steps 6–8.
+
+**Updating an existing setup to step 11 (central revocation)**
+
+```powershell
+git checkout main
+git pull
+docker compose down -v                      # the realm export now contains the admin-tool client
+docker compose up -d --build                # rebuilds the app (new back-channel logout endpoint)
+docker compose build admin-tool
+```
+
+Then repeat setup steps 6–8. Step 6 now also has **Admin tool secret**: copy the
+`admin-tool` client secret into `.env`. Check it with
+`docker compose run --rm admin-tool verify-least-privilege`.
+
+### Central revocation tool
+
+The tool runs only on demand (`docker compose up` does not start it):
+
+```powershell
+docker compose run --rm admin-tool sessions alice        # list active sessions
+docker compose run --rm admin-tool user-logout alice     # sign out everywhere
+docker compose run --rm admin-tool user-disable bob      # block the account and sign it out
+docker compose run --rm admin-tool user-enable bob       # unblock
+docker compose run --rm admin-tool user-reset alice      # new random password, MFA removed, e-mail link to set both again
+docker compose run --rm admin-tool group-logout staff    # same for a whole group (also group-disable, group-reset)
+docker compose run --rm admin-tool all-logout --yes      # emergency: sign out every user
+docker compose run --rm admin-tool verify-least-privilege
+```
+
+Every action prints one JSON audit line and is also recorded in Keycloak
+(Events → Admin events). The tests are in [docs/TESTING.md](docs/TESTING.md).
 
 ## Project layout
 
@@ -326,8 +373,10 @@ proxy/Caddyfile           HTTPS, security headers, routing by domain
 keycloak/import/          realm export, imported on first start
 app/                      web app / BFF (Dockerfile, app.py, templates, static)
 api/                      Notes API / resource server (Dockerfile, app.py)
+admin-tools/              central revocation tool (revoke.py, run with docker compose run)
 docs/TESTING.md           security tests and how to run them
 docs/report/              screenshots and material for the report
+tests/scripts/            test scripts (e.g. forged back-channel logout tokens)
 scripts/gen_env.py        creates .env
 .env.example              list of environment variables, no values
 certs/                    local mkcert certificates (not in Git)
@@ -348,6 +397,9 @@ certs/                    local mkcert certificates (not in Git)
 | `/` returns 502 "Service unavailable" | The API container is down: `docker compose ps`, `docker compose logs api --tail 30` |
 | After changing Keycloak settings nothing changed | Sign out and sign in again: tokens keep the settings they were issued with |
 | Admin login does not work | Keycloak uses `KC_ADMIN_PASSWORD` only on the very first start; changing `.env` later has no effect without `docker compose down -v` |
+| `admin-tool` says `ADMIN_TOOL_SECRET is empty` or `Could not get an admin token: 401` | Copy the secret from Clients → `admin-tool` → Credentials into `.env` (no quotes or spaces). `docker compose run` reads `.env` each time, no rebuild needed |
+| `verify-least-privilege` prints `FAIL` | The `admin-tool` service account has extra roles. Clients → `admin-tool` → Service account roles must list only `realm-management` `view-users`, `query-groups`, `manage-users` (plus `default-roles-itsm`) |
+| App log shows `backchannel_logout ... "sessions": 0` | The user signed in before the app was rebuilt with step 11, so the session isn't indexed yet. Sign in again and repeat |
 
 ## Rules for the repository
 

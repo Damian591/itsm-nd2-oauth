@@ -940,6 +940,32 @@
         "offline_access",
         "microprofile-jwt"
       ]
+    },
+    {
+      "id": "d41e878d-ceb6-4ca6-ae31-9260d57711dc",
+      "clientId": "admin-tool",
+      "name": "Central revocation tool",
+      "description": "Service account for central revocation (view-users, query-groups, manage-users only)",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "60"
+      },
+      "fullScopeAllowed": true,
+      "defaultClientScopes": [
+        "roles",
+        "basic"
+      ],
+      "optionalClientScopes": []
     }
   ],
   "clientScopes": [
@@ -3005,5 +3031,22 @@
   },
   "clientPolicies": {
     "policies": []
-  }
+  },
+  "users": [
+    {
+      "username": "service-account-admin-tool",
+      "enabled": true,
+      "serviceAccountClientId": "admin-tool",
+      "realmRoles": [
+        "default-roles-itsm"
+      ],
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "query-groups",
+          "manage-users"
+        ]
+      }
+    }
+  ]
 }

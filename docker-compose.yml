@@ -100,6 +100,22 @@ services:
     depends_on:
       - proxy
 
+  # Centralizuoto atšaukimo įrankis (paleidžiamas tik rankiniu būdu):
+  #   docker compose run --rm admin-tool user-logout alice
+  admin-tool:
+    build: ./admin-tools
+    profiles: ["tools"]
+    environment:
+      # tik admin-tool kliento duomenys – programa jų negauna
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      ADMIN_TOOL_ID: ${ADMIN_TOOL_ID}
+      ADMIN_TOOL_SECRET: ${ADMIN_TOOL_SECRET}
+      REQUESTS_CA_BUNDLE: /certs/rootCA.pem
+    volumes:
+      - ./certs/rootCA.pem:/certs/rootCA.pem:ro
+    depends_on:
+      - proxy
+
 volumes:
   kcdb: {}
   notes: {}
