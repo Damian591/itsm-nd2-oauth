@@ -12,6 +12,7 @@ import os
 import time
 from urllib.parse import urlencode
 
+import jwt
 import redis
 import requests
 from authlib.integrations.flask_client import OAuth
@@ -31,6 +32,8 @@ API_URL = "https://api.itsm.test"               # resource server, reached throu
 REDIRECT_URI = f"{APP_URL}/callback"            # fixed value, never built from the Host header
 ABSOLUTE_SESSION_MAX = 10 * 3600                # absolute session limit (10 h), same as Keycloak SSO Session Max
 REFRESH_MARGIN = 30                             # refresh the access token 30 s before it expires
+LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout"
+LOGOUT_TOKEN_MAX_AGE = 300                      # reject back-channel logout tokens older than 5 min
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger("auth")
@@ -67,6 +70,12 @@ app.config.update(
 Session(app)
 csrf = CSRFProtect(app)
 limiter = Limiter(get_remote_address, app=app, storage_uri=os.environ["REDIS_URL"])
+
+# Keycloak public keys (JWKS) for verifying back-channel logout tokens.
+# Cached for 5 minutes and fetched again when a token has an unknown key id (kid).
+jwks_client = jwt.PyJWKClient(
+    f"{ISSUER}/protocol/openid-connect/certs", cache_jwk_set=True, lifespan=300, timeout=5
+)
 
 oauth = OAuth(app)
 oauth.register(
@@ -108,6 +117,59 @@ def jwt_payload(token):
     part = token.split(".")[1]
     part += "=" * (-len(part) % 4)
     return json.loads(base64.urlsafe_b64decode(part))
+
+
+def index_session(kc_sid, sub):
+    """Remember which app sessions belong to a Keycloak session and to a user.
+
+    Back-channel logout tokens identify the session by Keycloak's `sid` (or the
+    user by `sub`), so these Redis sets map them to our own session ids. They
+    expire together with the longest possible app session.
+    """
+    for key in (f"bcl:sid:{kc_sid}" if kc_sid else None, f"bcl:sub:{sub}"):
+        if key:
+            rdb.sadd(key, session.sid)
+            rdb.expire(key, ABSOLUTE_SESSION_MAX)
+
+
+def unindex_session(kc_sid, sub):
+    """Remove the current app session from the back-channel logout index."""
+    for key in (f"bcl:sid:{kc_sid}" if kc_sid else None, f"bcl:sub:{sub}" if sub else None):
+        if key:
+            rdb.srem(key, session.sid)
+
+
+def validate_logout_token(token):
+    """Verify a back-channel logout token (OpenID Connect Back-Channel Logout 1.0).
+
+    Checks the RS256 signature with Keycloak's public key, issuer, audience
+    (this client), age and the logout event claim. A logout token must not
+    contain a nonce, must name a session (`sid`) or a user (`sub`), and every
+    token id (`jti`) is accepted only once, so a captured token can't be replayed.
+    Raises a PyJWT exception if anything is wrong.
+    """
+    signing_key = jwks_client.get_signing_key_from_jwt(token)
+    claims = jwt.decode(
+        token,
+        signing_key.key,
+        algorithms=["RS256"],
+        audience=CLIENT_ID,
+        issuer=ISSUER,
+        leeway=30,
+        options={"require": ["iat", "jti", "iss", "aud"]},
+    )
+    if LOGOUT_EVENT not in (claims.get("events") or {}):
+        raise jwt.InvalidTokenError("not a logout token")
+    if "nonce" in claims:
+        raise jwt.InvalidTokenError("logout token must not contain a nonce")
+    if not (claims.get("sid") or claims.get("sub")):
+        raise jwt.InvalidTokenError("no sid or sub")
+    if time.time() - claims["iat"] > LOGOUT_TOKEN_MAX_AGE:
+        raise jwt.InvalidTokenError("logout token too old")
+    # Replay protection: remember each jti a bit longer than a token can be valid.
+    if not rdb.set(f"bcl:jti:{claims['jti']}", 1, nx=True, ex=2 * LOGOUT_TOKEN_MAX_AGE):
+        raise jwt.InvalidTokenError("logout token already used")
+    return claims
 
 
 class LoginRequired(Exception):
@@ -318,6 +380,7 @@ def callback():
     session["auth_time"] = userinfo.get("auth_time", int(time.time()))
     session["created_at"] = int(time.time())
     session["kc_sid"] = userinfo.get("sid")     # Keycloak session id, used by back-channel logout
+    index_session(session["kc_sid"], userinfo["sub"])
     audit("login_success", sub=userinfo["sub"])
     return redirect(next_url)
 
@@ -347,6 +410,7 @@ def logout():
             pass
 
     # 2) Destroy the local session (Flask-Session deletes it from Redis).
+    unindex_session(session.get("kc_sid"), sub)
     session.clear()
     audit("logout", sub=sub)
 
@@ -355,3 +419,32 @@ def logout():
     if tokens.get("id_token"):
         params["id_token_hint"] = tokens["id_token"]
     return redirect(f"{meta['end_session_endpoint']}?{urlencode(params)}")
+
+
+@app.post("/backchannel-logout")
+@csrf.exempt
+def backchannel_logout():
+    """End app sessions when Keycloak ends the user's session (back-channel logout).
+
+    Keycloak POSTs a signed logout_token here when a session ends on its side,
+    e.g. an admin signs the user out or the central revocation tool is used.
+    The matching sessions are deleted from Redis at once, so the user is signed
+    out on the next request instead of after the access token expires.
+    Reachable only inside the Docker network: Caddy answers 404 from outside.
+    CSRF is not checked because the caller is Keycloak, not a browser; the
+    signed token is the proof of origin.
+    """
+    try:
+        claims = validate_logout_token(request.form.get("logout_token", ""))
+    except jwt.PyJWTError as exc:
+        audit("backchannel_logout_rejected", reason=str(exc))
+        return "", 400
+
+    index = f"bcl:sid:{claims['sid']}" if claims.get("sid") else f"bcl:sub:{claims['sub']}"
+    app_sids = rdb.smembers(index)
+    prefix = app.session_interface.key_prefix
+    for app_sid in app_sids:
+        rdb.delete(prefix + app_sid.decode())
+    rdb.delete(index)
+    audit("backchannel_logout", sub=claims.get("sub"), sessions=len(app_sids))
+    return "", 200
