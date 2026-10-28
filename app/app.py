@@ -335,7 +335,11 @@ def login():
     to prevent open redirects.
     """
     nxt = request.args.get("next", "/")
-    session["next"] = nxt if nxt.startswith("/") and not nxt.startswith("//") else "/"
+    # Only a path on this site. Browsers read "/\\host" as "//host" and drop tabs and
+    # newlines, so backslashes and control characters are refused too (open redirect).
+    unsafe = (not nxt.startswith("/") or nxt.startswith("//") or "\\" in nxt
+              or any(ord(ch) < 0x20 or ord(ch) == 0x7f for ch in nxt))
+    session["next"] = "/" if unsafe else nxt
     return oauth.kc.authorize_redirect(REDIRECT_URI)
 
 
@@ -361,8 +365,10 @@ def callback():
     userinfo = token.get("userinfo") or {}
     next_url = session.get("next", "/")
 
-    session.clear()
+    # New session id at login (session fixation). Order matters: Flask-Session's
+    # regenerate() does nothing for an empty session, so it must run before clear().
     app.session_interface.regenerate(session)
+    session.clear()
 
     session["user"] = {
         "sub": userinfo["sub"],
