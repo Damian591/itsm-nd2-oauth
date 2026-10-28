@@ -333,19 +333,35 @@ from a merged step), Keycloak does not pick it up by itself, because the realm i
 imported only when it doesn't exist yet. To get the new settings, run
 `docker compose down -v`, then `docker compose up -d` and repeat setup steps 6–8.
 
-**Updating an existing setup to step 11 (central revocation)**
+**Updating an existing setup to steps 11–12 (central revocation, security tests)**
+
+What changed for an existing setup:
+
+- `realm-export.json`: new `admin-tool` client, self-registration turned off.
+- `keycloak/password-blacklists/blocklist.txt`: about 72,500 more leaked
+  passwords of 12+ characters (Keycloak reads it only at start).
+- `app/app.py`: back-channel logout endpoint, session id regenerated at login,
+  stricter `next` check on `/login`.
+- `docker-compose.yml`: new `admin-tool` service, `api` restarts automatically.
 
 ```powershell
 git checkout main
 git pull
-docker compose down -v                      # the realm export now contains the admin-tool client
-docker compose up -d --build                # rebuilds the app (new back-channel logout endpoint)
+docker compose down -v                      # new realm settings are imported only into an empty database
+docker compose up -d --build                # rebuilds app and api, Keycloak loads the new blocklist
 docker compose build admin-tool
 ```
 
 Then repeat setup steps 6–8. Step 6 now also has **Admin tool secret**: copy the
-`admin-tool` client secret into `.env`. Check it with
-`docker compose run --rm admin-tool verify-least-privilege`.
+`admin-tool` client secret into `.env`. Check everything with:
+
+```powershell
+docker compose run --rm admin-tool verify-least-privilege
+Get-Content tests\scripts\security_tests.py | docker compose exec -T app python -
+```
+
+The second command needs alice, bob and admin1 signed in first and should end
+with `44 passed, 0 failed, 0 skipped` (see [docs/TESTING.md](docs/TESTING.md)).
 
 ### Central revocation tool
 
