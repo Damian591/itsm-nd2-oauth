@@ -91,6 +91,7 @@ services:
 
   api:
     build: ./api
+    restart: unless-stopped
     environment:
       OIDC_ISSUER: ${OIDC_ISSUER}
       SSL_CERT_FILE: /certs/rootCA.pem

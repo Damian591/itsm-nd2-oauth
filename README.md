@@ -24,7 +24,7 @@ The project is built step by step, one branch and one pull request per step.
 | 9 | Keycloak security policies: MFA, password policy, brute force protection | ✅ Done |
 | 10 | Password reset by email | ✅ Done |
 | 11 | Central revocation (admin tool, back-channel logout) | ✅ Done |
-| 12 | Security tests and test log | ⏳ Not started |
+| 12 | Security tests and test log | ✅ Done |
 | 13 | Threat model (STRIDE), ASVS mapping, report | ⏳ Not started |
 | 14 | Demo rehearsal | ⏳ Not started |
 
@@ -56,8 +56,8 @@ The project is built step by step, one branch and one pull request per step.
   Keycloak. When Keycloak ends a session (timeout or admin sign-out), the next
   refresh fails and the user has to enter the password again.
 - **Password policy** (NIST SP 800-63B-4): at least 12 characters, up to 128,
-  not the username or email, checked against a blocklist of 10,000 common passwords
-  plus project words. No composition rules and no forced expiry. Passwords are
+  not the username or email, checked against a blocklist of about 82,000 common and
+  leaked passwords (72,500 of them 12+ characters, from SecLists) plus project words. No composition rules and no forced expiry. Passwords are
   stored by Keycloak as Argon2 hashes.
 - **Brute force protection.** After 5 failed logins the account is locked
   temporarily (1 min, growing up to 15 min). The error message is always the same,
