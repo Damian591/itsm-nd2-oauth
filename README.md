@@ -25,7 +25,7 @@ The project is built step by step, one branch and one pull request per step.
 | 10 | Password reset by email | ✅ Done |
 | 11 | Central revocation (admin tool, back-channel logout) | ✅ Done |
 | 12 | Security tests and test log | ✅ Done |
-| 13 | Threat model (STRIDE), ASVS mapping, report | ⏳ Not started |
+| 13 | [Threat model (STRIDE), ASVS mapping, report](docs/Security_Assessment_Task13.docx) | ✅ Done |
 | 14 | Demo rehearsal | ⏳ Not started |
 
 ### What works right now
