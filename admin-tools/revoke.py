@@ -150,7 +150,14 @@ def verify_least_privilege(kc):
     """
     print(f"admin-tool roles: {', '.join(kc.roles) or '(none)'}")
     extra = set(kc.roles) - {"view-users", "query-users", "query-groups", "manage-users"}
-    webapp = kc.call("GET", "/clients", params={"clientId": "webapp"})
+
+    try:
+        webapp = kc.call("GET", "/clients", params={"clientId": "webapp"})
+    except PermissionError:
+        # Some Keycloak setups don't even let a user manager list clients: even stricter.
+        webapp = None
+        print("OK: cannot list clients (403 Forbidden)")
+
     checks = [("read login events", "/events")]
     if webapp:
         checks.insert(0, ("read the webapp client secret", f"/clients/{webapp[0]['id']}/client-secret"))
