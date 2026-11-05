@@ -26,7 +26,6 @@ The project is built step by step, one branch and one pull request per step.
 | 11 | Central revocation (admin tool, back-channel logout) | ✅ Done |
 | 12 | Security tests and test log | ✅ Done |
 | 13 | [Threat model (STRIDE), ASVS mapping, report](docs/THREAT_MODEL.md.docx) | ✅ Done |
-| 14 | Demo rehearsal | ⏳ Not started |
 
 ### What works right now
 
